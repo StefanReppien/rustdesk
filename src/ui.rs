@@ -548,6 +548,10 @@ impl UI {
         change_id_shared(id, old_id);
     }
 
+    fn http_request(&self, url: String, method: String, body: Option<String>, header: String) {
+        http_request(url, method, body, header)
+    }
+
     fn post_request(&self, url: String, body: String, header: String) {
         post_request(url, body, header)
     }
@@ -558,6 +562,10 @@ impl UI {
 
     fn get_async_job_status(&self) -> String {
         get_async_job_status()
+    }
+
+    fn get_http_status(&self, url: String) -> Option<String> {
+        get_async_http_status(url)
     }
 
     fn t(&self, name: String) -> String {
@@ -576,8 +584,8 @@ impl UI {
         has_hwcodec()
     }
 
-    fn has_gpucodec(&self) -> bool {
-        has_gpucodec()
+    fn has_vram(&self) -> bool {
+        has_vram()
     }
 
     fn get_langs(&self) -> String {
@@ -620,6 +628,10 @@ impl UI {
             hbb_common::sodiumoxide::base64::Variant::Original,
         );
         format!("data:image/png;base64,{s}")
+    }
+
+    pub fn check_hwcodec(&self) {
+        check_hwcodec()
     }
 }
 
@@ -701,7 +713,7 @@ impl sciter::EventHandler for UI {
         fn get_lan_peers();
         fn get_uuid();
         fn has_hwcodec();
-        fn has_gpucodec();
+        fn has_vram();
         fn get_langs();
         fn default_video_save_directory();
         fn handle_relay_id(String);
@@ -711,6 +723,7 @@ impl sciter::EventHandler for UI {
         fn generate2fa();
         fn generate_2fa_img_src(String);
         fn verify2fa(String);
+        fn check_hwcodec();
     }
 }
 

@@ -400,11 +400,20 @@ class _GeneralState extends State<_General> {
 
   Widget hwcodec() {
     final hwcodec = bind.mainHasHwcodec();
-    final gpucodec = bind.mainHasGpucodec();
+    final vram = bind.mainHasVram();
     return Offstage(
-      offstage: !(hwcodec || gpucodec),
+      offstage: !(hwcodec || vram),
       child: _Card(title: 'Hardware Codec', children: [
-        _OptionCheckBox(context, 'Enable hardware codec', 'enable-hwcodec')
+        _OptionCheckBox(
+          context,
+          'Enable hardware codec',
+          'enable-hwcodec',
+          update: () {
+            if (mainGetBoolOptionSync('enable-hwcodec')) {
+              bind.mainCheckHwcodec();
+            }
+          },
+        )
       ]),
     );
   }
@@ -1108,7 +1117,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                 child: Column(children: [
                   server(enabled),
                   _Card(title: 'Proxy', children: [
-                    _Button('Socks5 Proxy', changeSocks5Proxy,
+                    _Button('Socks5/Http(s) Proxy', changeSocks5Proxy,
                         enabled: enabled),
                   ]),
                 ]),
@@ -2038,7 +2047,7 @@ void changeSocks5Proxy() async {
     }
 
     return CustomAlertDialog(
-      title: Text(translate('Socks5 Proxy')),
+      title: Text(translate('Socks5/Http(s) Proxy')),
       content: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 500),
         child: Column(
@@ -2055,7 +2064,9 @@ void changeSocks5Proxy() async {
                 Expanded(
                   child: TextField(
                     decoration: InputDecoration(
-                        errorText: proxyMsg.isNotEmpty ? proxyMsg : null),
+                        errorText: proxyMsg.isNotEmpty ? proxyMsg : null,
+                        hintText: translate('Default protocol and port are Socks5 and 1080'),
+                    ),
                     controller: proxyController,
                     autofocus: true,
                   ),

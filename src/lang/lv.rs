@@ -239,6 +239,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Empty", "Tukšs"),
         ("Invalid folder name", "Nederīgs mapes nosaukums"),
         ("Socks5 Proxy", "Socks5 starpniekserveris"),
+        ("Socks5/Http(s) Proxy", "Socks5/Http(s) starpniekserveris"),
         ("Discovered", "Atklāts"),
         ("install_daemon_tip", "Lai palaistu pie startēšanas, ir jāinstalē sistēmas serviss."),
         ("Remote ID", "Attālais ID"),
@@ -600,6 +601,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("share_warning_tip", "Iepriekš minētie lauki ir koplietoti un redzami citiem."),
         ("Everyone", "Visi"),
         ("ab_web_console_tip", "Vairāk par tīmekļa konsoli"),
-        ("allow-only-conn-window-open-tip", ""),
+        ("allow-only-conn-window-open-tip", "Atļaut savienojumu tikai tad, ja ir atvērts RustDesk logs"),
+        ("no_need_privacy_mode_no_physical_displays_tip", "Nav fizisku displeju, nav jāizmanto privātuma režīms."),
+        ("Follow remote cursor", ""),
+        ("Follow remote window focus", ""),
     ].iter().cloned().collect();
 }
