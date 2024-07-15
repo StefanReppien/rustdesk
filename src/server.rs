@@ -360,7 +360,12 @@ impl Server {
         self.services
             .keys()
             .filter(|k| {
-                Self::is_video_service_name(k) && self.services.get(*k).unwrap().is_subed(conn_id)
+                Self::is_video_service_name(k)
+                    && self
+                        .services
+                        .get(*k)
+                        .map(|s| s.is_subed(conn_id))
+                        .unwrap_or(false)
             })
             .count()
     }
@@ -467,12 +472,9 @@ pub async fn start_server(is_server: bool) {
         std::thread::spawn(move || {
             if let Err(err) = crate::ipc::start("") {
                 log::error!("Failed to start ipc: {}", err);
-                #[cfg(windows)]
-                if crate::is_server() && crate::ipc::is_ipc_file_exist("").unwrap_or(false) {
+                if crate::is_server() {
                     log::error!("ipc is occupied by another process, try kill it");
-                    if let Err(e) = crate::platform::try_kill_rustdesk_main_window_process() {
-                        log::error!("kill failed: {}", e);
-                    }
+                    std::thread::spawn(stop_main_window_process).join().ok();
                 }
                 std::process::exit(-1);
             }
@@ -487,7 +489,7 @@ pub async fn start_server(is_server: bool) {
         #[cfg(target_os = "windows")]
         crate::platform::try_kill_broker();
         #[cfg(feature = "hwcodec")]
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         scrap::hwcodec::start_check_process();
         crate::RendezvousMediator::start_all().await;
     } else {
@@ -635,4 +637,20 @@ async fn sync_and_watch_config_dir() {
         }
     }
     log::warn!("skipped config sync");
+}
+
+#[tokio::main(flavor = "current_thread")]
+pub async fn stop_main_window_process() {
+    // this may also kill another --server process,
+    // but --server usually can be auto restarted by --service, so it is ok
+    if let Ok(mut conn) = crate::ipc::connect(1000, "").await {
+        conn.send(&crate::ipc::Data::Close).await.ok();
+    }
+    #[cfg(windows)]
+    {
+        // in case above failure, e.g. zombie process
+        if let Err(e) = crate::platform::try_kill_rustdesk_main_window_process() {
+            log::error!("kill failed: {}", e);
+        }
+    }
 }

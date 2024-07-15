@@ -28,7 +28,7 @@ use hwcodec::{
 };
 
 const DEFAULT_PIXFMT: AVPixelFormat = AVPixelFormat::AV_PIX_FMT_NV12;
-pub const DEFAULT_TIME_BASE: [i32; 2] = [1, 30];
+pub const DEFAULT_FPS: i32 = 30;
 const DEFAULT_GOP: i32 = i32::MAX;
 const DEFAULT_HW_QUALITY: Quality = Quality_Default;
 
@@ -82,7 +82,7 @@ impl EncoderApi for HwRamEncoder {
                     pixfmt: DEFAULT_PIXFMT,
                     align: HW_STRIDE_ALIGN as _,
                     kbs: bitrate as i32,
-                    timebase: DEFAULT_TIME_BASE,
+                    fps: DEFAULT_FPS,
                     gop,
                     quality: DEFAULT_HW_QUALITY,
                     rc,
@@ -113,16 +113,16 @@ impl EncoderApi for HwRamEncoder {
         }
     }
 
-    fn encode_to_message(&mut self, input: EncodeInput, _ms: i64) -> ResultType<VideoFrame> {
+    fn encode_to_message(&mut self, input: EncodeInput, ms: i64) -> ResultType<VideoFrame> {
         let mut vf = VideoFrame::new();
         let mut frames = Vec::new();
         for frame in self
-            .encode(input.yuv()?)
+            .encode(input.yuv()?, ms)
             .with_context(|| "Failed to encode")?
         {
             frames.push(EncodedVideoFrame {
                 data: Bytes::from(frame.data),
-                pts: frame.pts as _,
+                pts: frame.pts,
                 key: frame.key == 1,
                 ..Default::default()
             });
@@ -192,19 +192,21 @@ impl EncoderApi for HwRamEncoder {
     }
 
     fn support_abr(&self) -> bool {
-        ["qsv", "vaapi", "mediacodec"]
+        ["qsv", "vaapi", "mediacodec", "videotoolbox"]
             .iter()
             .all(|&x| !self.config.name.contains(x))
     }
 
     fn support_changing_quality(&self) -> bool {
-        ["vaapi", "mediacodec"]
+        ["vaapi", "mediacodec", "videotoolbox"]
             .iter()
             .all(|&x| !self.config.name.contains(x))
     }
 
     fn latency_free(&self) -> bool {
-        !self.config.name.contains("mediacodec")
+        ["mediacodec", "videotoolbox"]
+            .iter()
+            .all(|&x| !self.config.name.contains(x))
     }
 
     fn is_hardware(&self) -> bool {
@@ -236,8 +238,8 @@ impl HwRamEncoder {
         info
     }
 
-    pub fn encode(&mut self, yuv: &[u8]) -> ResultType<Vec<EncodeFrame>> {
-        match self.encoder.encode(yuv) {
+    pub fn encode(&mut self, yuv: &[u8], ms: i64) -> ResultType<Vec<EncodeFrame>> {
+        match self.encoder.encode(yuv, ms) {
             Ok(v) => {
                 let mut data = Vec::<EncodeFrame>::new();
                 data.append(v);
@@ -501,12 +503,12 @@ pub struct HwCodecConfig {
 // portable: ui start check process, check process send to ui
 // sciter and unilink: get from ipc server
 impl HwCodecConfig {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn set(config: String) {
         let config = serde_json::from_str(&config).unwrap_or_default();
         log::info!("set hwcodec config");
         log::debug!("{config:?}");
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         hbb_common::config::common_store(&config, "_hwcodec");
         *CONFIG.lock().unwrap() = Some(config);
         *CONFIG_SET_BY_IPC.lock().unwrap() = true;
@@ -578,7 +580,7 @@ impl HwCodecConfig {
                 ..Default::default()
             }
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             let config = CONFIG.lock().unwrap().clone();
             match config {
@@ -606,13 +608,13 @@ impl HwCodecConfig {
         {
             CONFIG.lock().unwrap().clone().unwrap_or_default()
         }
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        #[cfg(target_os = "ios")]
         {
             HwCodecConfig::default()
         }
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn get_set_value() -> Option<HwCodecConfig> {
         let set = CONFIG_SET_BY_IPC.lock().unwrap().clone();
         if set {
@@ -622,7 +624,7 @@ impl HwCodecConfig {
         }
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn already_set() -> bool {
         CONFIG_SET_BY_IPC.lock().unwrap().clone()
     }
@@ -664,7 +666,7 @@ pub fn check_available_hwcodec() -> String {
         pixfmt: DEFAULT_PIXFMT,
         align: HW_STRIDE_ALIGN as _,
         kbs: 0,
-        timebase: DEFAULT_TIME_BASE,
+        fps: DEFAULT_FPS,
         gop: DEFAULT_GOP,
         quality: DEFAULT_HW_QUALITY,
         rc: RC_CBR,
@@ -690,7 +692,7 @@ pub fn check_available_hwcodec() -> String {
     serde_json::to_string(&c).unwrap_or_default()
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn start_check_process() {
     if !enable_hwcodec_option() || HwCodecConfig::already_set() {
         return;
