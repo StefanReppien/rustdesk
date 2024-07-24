@@ -89,7 +89,7 @@ pub fn stop_global_event_stream(app_type: String) {
 pub enum EventToUI {
     Event(String),
     Rgba(usize),
-    Texture(usize),
+    Texture(usize, bool), // (display, gpu_texture)
 }
 
 pub fn host_stop_system_key_propagate(_stopped: bool) {
@@ -2211,6 +2211,10 @@ pub fn main_has_valid_bot_sync() -> SyncReturn<bool> {
 
 pub fn main_get_hard_option(key: String) -> SyncReturn<String> {
     SyncReturn(get_hard_option(key))
+}
+
+pub fn main_get_buildin_option(key: String) -> SyncReturn<String> {
+    SyncReturn(get_buildin_option(&key))
 }
 
 pub fn main_check_hwcodec() {
