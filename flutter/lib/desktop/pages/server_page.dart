@@ -32,14 +32,18 @@ class DesktopServerPage extends StatefulWidget {
 class _DesktopServerPageState extends State<DesktopServerPage>
     with WindowListener, AutomaticKeepAliveClientMixin {
   final tabController = gFFI.serverModel.tabController;
-  @override
-  void initState() {
+
+  _DesktopServerPageState() {
     gFFI.ffiModel.updateEventListener(gFFI.sessionId, "");
-    windowManager.addListener(this);
     Get.put<DesktopTabController>(tabController);
     tabController.onRemoved = (_, id) {
       onRemoveId(id);
     };
+  }
+
+  @override
+  void initState() {
+    windowManager.addListener(this);
     super.initState();
   }
 
@@ -79,7 +83,7 @@ class _DesktopServerPageState extends State<DesktopServerPage>
       child: Consumer<ServerModel>(
         builder: (context, serverModel, child) {
           final body = Scaffold(
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            backgroundColor: Theme.of(context).colorScheme.background,
             body: ConnectionManager(),
           );
           return isLinux
@@ -108,19 +112,7 @@ class ConnectionManagerState extends State<ConnectionManager>
     with WidgetsBindingObserver {
   final RxBool _block = false.obs;
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      if (!allowRemoteCMModification()) {
-        shouldBeBlocked(_block, null);
-      }
-    }
-  }
-
-  @override
-  void initState() {
-    gFFI.serverModel.updateClientState();
+  ConnectionManagerState() {
     gFFI.serverModel.tabController.onSelected = (client_id_str) {
       final client_id = int.tryParse(client_id_str);
       if (client_id != null) {
@@ -140,6 +132,21 @@ class ConnectionManagerState extends State<ConnectionManager>
       }
     };
     gFFI.chatModel.isConnManager = true;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      if (!allowRemoteCMModification()) {
+        shouldBeBlocked(_block, null);
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    gFFI.serverModel.updateClientState();
     WidgetsBinding.instance.addObserver(this);
     super.initState();
   }
@@ -186,8 +193,6 @@ class ConnectionManagerState extends State<ConnectionManager>
               maxLabelWidth: 100,
               tail: null, //buildScrollJumper(),
               blockTab: allowRemoteCMModification() ? null : _block,
-              selectedTabBackgroundColor:
-                  Theme.of(context).hintColor.withOpacity(0),
               tabBuilder: (key, icon, label, themeConf) {
                 final client = serverModel.clients
                     .firstWhereOrNull((client) => client.id.toString() == key);
@@ -222,7 +227,7 @@ class ConnectionManagerState extends State<ConnectionManager>
                           borderWidth;
                   final realChatPageWidth =
                       constrains.maxWidth - realClosedWidth;
-                  return Row(children: [
+                  final row = Row(children: [
                     if (constrains.maxWidth >
                         kConnectionManagerWindowSizeClosedChat.width)
                       Consumer<ChatModel>(
@@ -240,6 +245,10 @@ class ConnectionManagerState extends State<ConnectionManager>
                         child:
                             SizedBox(width: realClosedWidth, child: pageView)),
                   ]);
+                  return Container(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: row,
+                  );
                 },
               ),
             ),
@@ -1146,6 +1155,16 @@ class __FileTransferLogPageState extends State<_FileTransferLogPage> {
               color: Theme.of(context).tabBarTheme.labelColor,
             ),
             Text(translate('Create Folder'))
+          ],
+        );
+      case CmFileAction.rename:
+        return Column(
+          children: [
+            Icon(
+              Icons.drive_file_move_outlined,
+              color: Theme.of(context).tabBarTheme.labelColor,
+            ),
+            Text(translate('Rename'))
           ],
         );
     }

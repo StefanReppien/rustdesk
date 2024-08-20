@@ -68,8 +68,6 @@ use std::{
 pub const NAME: &'static str = "video";
 pub const OPTION_REFRESH: &'static str = "refresh";
 
-const REFRESH_MIN_INTERVAL_MILLIS: u128 = 300;
-
 lazy_static::lazy_static! {
     static ref FRAME_FETCHED_NOTIFIER: (UnboundedSender<(i32, Option<Instant>)>, Arc<TokioMutex<UnboundedReceiver<(i32, Option<Instant>)>>>) = {
         let (tx, rx) = unbounded_channel();
@@ -78,8 +76,6 @@ lazy_static::lazy_static! {
     pub static ref VIDEO_QOS: Arc<Mutex<VideoQoS>> = Default::default();
     pub static ref IS_UAC_RUNNING: Arc<Mutex<bool>> = Default::default();
     pub static ref IS_FOREGROUND_WINDOW_ELEVATED: Arc<Mutex<bool>> = Default::default();
-    // Avoid refreshing too frequently
-    static ref LAST_REFRESH_TIME: Arc<Mutex<HashMap<usize, Instant>>> = Default::default();
 }
 
 #[inline]
@@ -517,23 +513,9 @@ fn run(vs: VideoService) -> ResultType<()> {
         drop(video_qos);
 
         if sp.is_option_true(OPTION_REFRESH) {
-            if LAST_REFRESH_TIME
-                .lock()
-                .unwrap()
-                .get(&vs.idx)
-                .map(|x| x.elapsed().as_millis() > REFRESH_MIN_INTERVAL_MILLIS)
-                .unwrap_or(true)
-            {
-                let _ = try_broadcast_display_changed(&sp, display_idx, &c, true);
-                LAST_REFRESH_TIME
-                    .lock()
-                    .unwrap()
-                    .insert(vs.idx, Instant::now());
-                log::info!("switch to refresh");
-                bail!("SWITCH");
-            } else {
-                sp.set_option_bool(OPTION_REFRESH, false);
-            }
+            let _ = try_broadcast_display_changed(&sp, display_idx, &c, true);
+            log::info!("switch to refresh");
+            bail!("SWITCH");
         }
         if codec_format != Encoder::negotiated_codec() {
             log::info!(
@@ -558,7 +540,7 @@ fn run(vs: VideoService) -> ResultType<()> {
             VRamEncoder::set_fallback_gdi(display_idx, true);
             bail!("SWITCH");
         }
-        check_privacy_mode_changed(&sp, c.privacy_mode_id)?;
+        check_privacy_mode_changed(&sp, display_idx, &c)?;
         #[cfg(windows)]
         {
             if crate::platform::windows::desktop_changed()
@@ -677,7 +659,7 @@ fn run(vs: VideoService) -> ResultType<()> {
         let timeout_millis = 3_000u64;
         let wait_begin = Instant::now();
         while wait_begin.elapsed().as_millis() < timeout_millis as _ {
-            check_privacy_mode_changed(&sp, c.privacy_mode_id)?;
+            check_privacy_mode_changed(&sp, display_idx, &c)?;
             frame_controller.try_wait_next(&mut fetched_conn_ids, 300);
             // break if all connections have received current frame
             if fetched_conn_ids.len() >= frame_controller.send_conn_ids.len() {
@@ -894,9 +876,13 @@ fn check_change_scale(hardware: bool) -> ResultType<()> {
     Ok(())
 }
 
-fn check_privacy_mode_changed(sp: &GenericService, privacy_mode_id: i32) -> ResultType<()> {
+fn check_privacy_mode_changed(
+    sp: &GenericService,
+    display_idx: usize,
+    ci: &CapturerInfo,
+) -> ResultType<()> {
     let privacy_mode_id_2 = get_privacy_mode_conn_id().unwrap_or(INVALID_PRIVACY_MODE_CONN_ID);
-    if privacy_mode_id != privacy_mode_id_2 {
+    if ci.privacy_mode_id != privacy_mode_id_2 {
         if privacy_mode_id_2 != INVALID_PRIVACY_MODE_CONN_ID {
             let msg_out = crate::common::make_privacy_mode_msg(
                 back_notification::PrivacyModeState::PrvOnByOther,
@@ -905,6 +891,7 @@ fn check_privacy_mode_changed(sp: &GenericService, privacy_mode_id: i32) -> Resu
             sp.send_to_others(msg_out, privacy_mode_id_2);
         }
         log::info!("switch due to privacy mode changed");
+        try_broadcast_display_changed(&sp, display_idx, ci, true).ok();
         bail!("SWITCH");
     }
     Ok(())
