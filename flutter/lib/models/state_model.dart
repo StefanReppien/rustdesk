@@ -19,6 +19,11 @@ class StateGlobal {
   final RxBool showRemoteToolBar = false.obs;
   final svcStatus = SvcStatus.notReady.obs;
   final RxBool isFocused = false.obs;
+  // for mobile and web
+  bool isInMainPage = true;
+  bool isWebVisible = true;
+
+  final isPortrait = false.obs;
 
   String _inputSource = '';
 
