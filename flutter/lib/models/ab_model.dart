@@ -33,6 +33,8 @@ bool filterAbTagByIntersection() {
 const _personalAddressBookName = "My address book";
 const _legacyAddressBookName = "Legacy address book";
 
+const kUntagged = "Untagged";
+
 enum ForcePullAb {
   listAndCurrent,
   current,
@@ -55,6 +57,9 @@ class AbModel {
   RxString get currentAbPushError => current.pushError;
   String? _personalAbGuid;
   RxBool legacyMode = false.obs;
+
+  // Only handles peers add/remove
+  final Map<String, VoidCallback> _peerIdUpdateListeners = {};
 
   final sortTags = shouldSortTags().obs;
   final filterByIntersection = filterAbTagByIntersection().obs;
@@ -186,6 +191,7 @@ class AbModel {
         debugPrint("pull current Ab error: $e");
       }
     }
+    _callbackPeerUpdate();
     if (listInitialized && current.initialized) {
       _saveCache();
     }
@@ -417,6 +423,7 @@ class AbModel {
         }
       });
     }
+    _callbackPeerUpdate();
     return ret;
   }
 
@@ -424,6 +431,7 @@ class AbModel {
 
 // #region tags
   Future<bool> addTags(List<String> tagList) async {
+    tagList.removeWhere((e) => e == kUntagged);
     final ret = await current.addTags(tagList, {});
     await pullNonLegacyAfterChange();
     _saveCache();
@@ -617,6 +625,9 @@ class AbModel {
           }
         }
       }
+      if (abEntries.isNotEmpty) {
+        _callbackPeerUpdate();
+      }
     }
   }
 
@@ -645,6 +656,9 @@ class AbModel {
   }
 
   Color getCurrentAbTagColor(String tag) {
+    if (tag == kUntagged) {
+      return MyTheme.accent;
+    }
     int? colorValue = current.tagColors[tag];
     if (colorValue != null) {
       return Color(colorValue);
@@ -734,6 +748,20 @@ class AbModel {
     } else {
       return name;
     }
+  }
+
+  void _callbackPeerUpdate() {
+    for (var listener in _peerIdUpdateListeners.values) {
+      listener();
+    }
+  }
+
+  void addPeerUpdateListener(String key, VoidCallback listener) {
+    _peerIdUpdateListeners[key] = listener;
+  }
+
+  void removePeerUpdateListener(String key) {
+    _peerIdUpdateListeners.remove(key);
   }
 
 // #endregion
